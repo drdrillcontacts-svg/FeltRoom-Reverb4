@@ -1,8 +1,12 @@
 
-name: Build FeltRoom VST3 (Windows)
+name: Build FeltRoom (Windows VST3 / macOS AU+VST3)
 
 "on":
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+      - master
   push:
     branches:
       - main
@@ -45,4 +49,62 @@ jobs:
         with:
           name: FeltRoom-Windows-VST3
           path: FeltRoom-Windows-VST3.zip
+          if-no-files-found: error
+
+  build-macos:
+    runs-on: macos-14
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Configure with CMake
+        run: |
+          set -o pipefail
+          cmake --version
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release 2>&1 | tee cmake_out.txt || {
+            echo "::error::CMake configure failed. Last lines:"
+            tail -30 cmake_out.txt | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
+
+      - name: Build Release AU + VST3
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Validate AU (auval)
+        run: |
+          set -o pipefail
+          au=$(find build -name "*.component" -type d | head -1)
+          if [ -z "$au" ]; then
+            echo "::error::AU bundle not found after build"
+            exit 1
+          fi
+          mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
+          cp -R "$au" "$HOME/Library/Audio/Plug-Ins/Components/"
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          /usr/bin/auval -v aufx Flrm Dazi 2>&1 | tee auval_out.txt || {
+            echo "::error::auval failed. Last lines:"
+            tail -30 auval_out.txt | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
+
+      - name: Package macOS plugins
+        run: |
+          mkdir -p dist
+          au=$(find build -name "*.component" -type d | head -1)
+          vst3=$(find build -name "*.vst3" -type d | head -1)
+          if [ -z "$au" ]; then echo "AU bundle not found"; exit 1; fi
+          if [ -z "$vst3" ]; then echo "VST3 bundle not found"; exit 1; fi
+          cp -R "$au" dist/
+          cp -R "$vst3" dist/
+          cd dist && zip -ry ../FeltRoom-macOS-AU-VST3.zip .
+
+      - name: Upload macOS download
+        uses: actions/upload-artifact@v4
+        with:
+          name: FeltRoom-macOS-AU-VST3
+          path: FeltRoom-macOS-AU-VST3.zip
           if-no-files-found: error
