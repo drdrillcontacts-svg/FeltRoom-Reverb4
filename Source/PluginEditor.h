@@ -127,6 +127,9 @@ private:
     CopperLook look;
     juce::Image piano;
 
+    // virtual 1200x895 canvas - scaled via setTransform so the UI can be resized
+    juce::Component content;
+
     // header
     std::unique_ptr<FrButton> saveBtn, loadBtn, gearBtn;
 

@@ -20,6 +20,10 @@ const juce::Colour kDarkFill  {0xff161014};
 const juce::Colour kWarmFill  {0xff1b1210};
 const juce::Colour kPanelFill {0xff120c0e};
 
+// virtual design size - the whole UI is laid out in this space and scaled
+constexpr int kDesignW = 1200;
+constexpr int kDesignH = 895;
+
 void strokeBronze (juce::Graphics& g, juce::Rectangle<float> r, float radius, float thin = 1.4f)
 {
     for (int pass = 0; pass < 2; ++pass)
@@ -663,6 +667,8 @@ FeltRoomEditor::FeltRoomEditor (FeltRoomProcessor& p) : AudioProcessorEditor (p)
     buildBank();
     loadExtras();
 
+    addAndMakeVisible (content);
+
     // ---- header buttons ----
     saveBtn = std::make_unique<FrButton> ("SAVE", FrIcon::save);
     loadBtn = std::make_unique<FrButton> ("LOAD", FrIcon::load);
@@ -672,7 +678,7 @@ FeltRoomEditor::FeltRoomEditor (FeltRoomProcessor& p) : AudioProcessorEditor (p)
     saveBtn->onClick = [this] { savePreset(); };
     loadBtn->onClick = [this] { loadPreset(); };
     gearBtn->onClick = [this] { showAbout(); };
-    for (auto* b : { saveBtn.get(), loadBtn.get(), gearBtn.get() }) addAndMakeVisible (*b);
+    for (auto* b : { saveBtn.get(), loadBtn.get(), gearBtn.get() }) content.addAndMakeVisible (*b);
 
     // ---- character buttons ----
     const char* names[6]  = { "ROOM", "HALL", "PLATE", "CHAMBER", "VINTAGE", "AMBIENT" };
@@ -687,7 +693,7 @@ FeltRoomEditor::FeltRoomEditor (FeltRoomProcessor& p) : AudioProcessorEditor (p)
                 par->setValueNotifyingHost (par->convertTo0to1 ((float) i));
             syncWidgets();
         };
-        addAndMakeVisible (*charBtns[(size_t) i]);
+        content.addAndMakeVisible (*charBtns[(size_t) i]);
     }
 
     // ---- knobs ----
@@ -709,7 +715,7 @@ FeltRoomEditor::FeltRoomEditor (FeltRoomProcessor& p) : AudioProcessorEditor (p)
             return v;
         };
         k.onValueChange = [this] { repaint(); };
-        addAndMakeVisible (k);
+        content.addAndMakeVisible (k);
         attachments[(size_t) i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
             proc.params, ids[i], k);
     }
@@ -730,7 +736,7 @@ FeltRoomEditor::FeltRoomEditor (FeltRoomProcessor& p) : AudioProcessorEditor (p)
         const int id = presetBox.getSelectedId();
         if (id > 0) applyFlat (id - 1);
     };
-    addAndMakeVisible (presetBox);
+    content.addAndMakeVisible (presetBox);
 
     prevBtn  = std::make_unique<FrButton> ("", FrIcon::prev);
     nextBtn  = std::make_unique<FrButton> ("", FrIcon::next);
@@ -739,7 +745,7 @@ FeltRoomEditor::FeltRoomEditor (FeltRoomProcessor& p) : AudioProcessorEditor (p)
     prevBtn->onClick   = [this] { stepPreset (-1); };
     nextBtn->onClick   = [this] { stepPreset ( 1); };
     randomBtn->onClick = [this] { randomPreset(); };
-    for (auto* b : { prevBtn.get(), nextBtn.get(), randomBtn.get() }) addAndMakeVisible (*b);
+    for (auto* b : { prevBtn.get(), nextBtn.get(), randomBtn.get() }) content.addAndMakeVisible (*b);
 
     searchBox.setTextToShowWhenEmpty ("Search...", kDimText);
     searchBox.setIndents (36, 1);
@@ -753,19 +759,19 @@ FeltRoomEditor::FeltRoomEditor (FeltRoomProcessor& p) : AudioProcessorEditor (p)
         searchText = searchBox.getText();
         rebuildVisible();
     };
-    addAndMakeVisible (searchBox);
+    content.addAndMakeVisible (searchBox);
 
     searchIcon = std::make_unique<FrIconComp> (FrIcon::search);
     searchIcon->colour = kDimText;
-    addAndMakeVisible (*searchIcon);
+    content.addAndMakeVisible (*searchIcon);
 
     // ---- panels ----
     categories.onSelect = [this] (int c) { category = c; rebuildVisible(); };
-    addAndMakeVisible (categories);
+    content.addAndMakeVisible (categories);
 
     presetList.onSelect = [this] (int flat) { applyFlat (flat); };
     presetList.onToggleStar = [this] (int flat) { toggleStar (flat); };
-    addAndMakeVisible (presetList);
+    content.addAndMakeVisible (presetList);
 
     proc.params.addParameterListener ("MODE", this);
 
@@ -773,7 +779,14 @@ FeltRoomEditor::FeltRoomEditor (FeltRoomProcessor& p) : AudioProcessorEditor (p)
     rebuildVisible();
     syncWidgets();
 
-    setSize (1200, 895);
+    content.setBounds (0, 0, kDesignW, kDesignH);
+
+    // resizable window with locked aspect ratio - the virtual canvas is scaled
+    setResizable (true, true);
+    getConstrainer()->setFixedAspectRatio ((double) kDesignW / (double) kDesignH);
+    setResizeLimits (840, 627, 1800, 1343);
+
+    setSize (kDesignW, kDesignH);
 }
 
 FeltRoomEditor::~FeltRoomEditor()
@@ -1001,8 +1014,12 @@ void FeltRoomEditor::showAbout()
         juce::MessageBoxOptions()
             .withIconType (juce::MessageBoxIconType::InfoIcon)
             .withTitle ("About FeltRoom")
-            .withMessage ("FeltRoom Reverb 2.0\nD.A Production\n\n"
-                          "Felt Reverb — algorithmic reverb with six character modes, "
+            .withMessage ("FeltRoom Reverb 1.0\n"
+                          "D.A Production\n\n"
+                          "By Daniyal Azimi\n"
+                          "UI Designer: Maani Kaafi\n\n"
+                          "Instagram | @daniyal_azimi\n\n"
+                          "Felt Reverb - algorithmic reverb with six character modes, "
                           "24 factory presets and full preset management.")
             .withButton ("OK"),
         nullptr);
@@ -1029,6 +1046,10 @@ void FeltRoomEditor::syncWidgets()
 // =====================================================================
 void FeltRoomEditor::resized()
 {
+    // scale the virtual canvas to the current window size (aspect ratio is locked)
+    content.setTransform (juce::AffineTransform::scale (
+        juce::jmax (0.01f, (float) getWidth() / (float) kDesignW)));
+
     // header
     saveBtn->setBounds  (872, 25, 104, 42);
     loadBtn->setBounds  (984, 25, 104, 42);
@@ -1055,10 +1076,12 @@ void FeltRoomEditor::resized()
 
 void FeltRoomEditor::paint (juce::Graphics& g)
 {
+    // paint in the virtual design space, scaled to the window
+    g.addTransform (juce::AffineTransform::scale ((float) getWidth() / (float) kDesignW));
     g.fillAll (kBg);
 
     // ---- hero image band ----
-    auto imageArea = juce::Rectangle<int> (0, 92, getWidth(), 280);
+    auto imageArea = juce::Rectangle<int> (0, 92, kDesignW, 280);
     if (piano.isValid())
         g.drawImage (piano, imageArea.toFloat(), juce::RectanglePlacement::fillDestination);
     juce::ColourGradient topFade (juce::Colours::black.withAlpha (0.72f), 0.0f, 92.0f,
@@ -1077,10 +1100,10 @@ void FeltRoomEditor::paint (juce::Graphics& g)
     g.drawText ("D\u00b7A Production", 92, 32, 220, 36, juce::Justification::centredLeft);
 
     g.setFont (juce::Font (juce::FontOptions (30.0f)));
-    g.drawText ("F E L T R O O M", 0, 18, getWidth(), 42, juce::Justification::centred);
+    g.drawText ("F E L T R O O M", 0, 18, kDesignW, 42, juce::Justification::centred);
     g.setColour (kTan);
     g.setFont (juce::Font (juce::FontOptions (11.5f)));
-    g.drawText ("F E L T   R E V E R B", 0, 62, getWidth(), 20, juce::Justification::centred);
+    g.drawText ("F E L T   R E V E R B", 0, 62, kDesignW, 20, juce::Justification::centred);
 
     // ---- knob readouts ----
     const char* labels[] = { "PRE-DELAY", "DECAY", "SIZE", "DAMPING", "LOW CUT", "HIGH CUT", "MIX" };
@@ -1101,5 +1124,6 @@ void FeltRoomEditor::paint (juce::Graphics& g)
 
     // ---- window edge ----
     g.setColour (kBronzeLo.withAlpha (0.55f));
-    g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (8.0f), 12.0f, 1.0f);
+    g.drawRoundedRectangle (juce::Rectangle<float> (0.0f, 0.0f, (float) kDesignW, (float) kDesignH)
+                                .reduced (8.0f), 12.0f, 1.0f);
 }
