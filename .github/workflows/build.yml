@@ -3,6 +3,10 @@ name: Build FeltRoom VST3 (Windows)
 
 "on":
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+      - master
   push:
     branches:
       - main
