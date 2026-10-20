@@ -62,22 +62,34 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure with CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: |
+          set -o pipefail
+          cmake --version
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release 2>&1 | tee cmake_out.txt || {
+            echo "::error::CMake configure failed. Last lines:"
+            tail -30 cmake_out.txt | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
 
       - name: Build Release AU + VST3
         run: cmake --build build --config Release --parallel 2
 
       - name: Validate AU (auval)
         run: |
+          set -o pipefail
           au=$(find build -name "*.component" -type d | head -1)
           if [ -z "$au" ]; then
-            echo "AU bundle not found after build"
+            echo "::error::AU bundle not found after build"
             exit 1
           fi
           mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
           cp -R "$au" "$HOME/Library/Audio/Plug-Ins/Components/"
           killall -9 AudioComponentRegistrar 2>/dev/null || true
-          /usr/bin/auval -v aufx Flrm Dazi
+          /usr/bin/auval -v aufx Flrm Dazi 2>&1 | tee auval_out.txt || {
+            echo "::error::auval failed. Last lines:"
+            tail -30 auval_out.txt | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
 
       - name: Package macOS plugins
         run: |
