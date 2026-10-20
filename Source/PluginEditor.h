@@ -84,7 +84,7 @@ public:
 
 // =====================================================================
 class FeltRoomEditor final : public juce::AudioProcessorEditor,
-                             private juce::AudioProcessorValueTreeState::ParameterListener,
+                             private juce::AudioProcessorValueTreeState::Listener,
                              private juce::AsyncUpdater
 {
 public:
@@ -102,8 +102,7 @@ private:
     };
 
     // parameter listener / async updater
-    void parameterValueChanged (int, float) override { triggerAsyncUpdate(); }
-    void parameterGestureChanged (int, bool) override {}
+    void parameterChanged (const juce::String&, float) override { triggerAsyncUpdate(); }
     void handleAsyncUpdate() override;
 
     void buildBank();

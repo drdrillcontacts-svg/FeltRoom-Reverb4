@@ -417,7 +417,7 @@ void FrButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
             return;
         }
         g.setFont (juce::Font (juce::FontOptions (fontSize)));
-        const float tw = (float) g.getCurrentFont().getStringWidth (txt);
+        const float tw = juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), txt);
         const float total = tw + side * 0.55f;
         const float left = r.getCentreX() - total * 0.5f;
         frDrawIcon (g, icon, { left, r.getCentreY() - side * 0.5f, side, side }, colour);
